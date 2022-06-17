@@ -1,0 +1,26 @@
+jwt tokens: 3 parts- header, payload, signature. We take the header and concantonate it to the payload and add a 'secret'
+and then run those three components through an encoding algorithm to create a signature. Encoding is not hard to break, so 
+if a user knew what encoding method was used to create the jwt token they could reverse engineer the token and read
+its contents (not the secret though because that isn't included in the token, only the signature that was created by using it
+as one of it's parameters).
+
+So if the user decodes the token and changes the credentials in the payload (which includes things like username, user type, etc.)
+in an attempt to gain special access to the system, this would require the creation of a new signature. That's because the new token
+(which the user edited to change his access permission) will not match the test token that the API will use to verify the authenticity 
+of the token being returned by the user. The payload doesn't match the signature (which was created with the original payload values).
+
+So what the sneaky user might try to do is edit the signature also to reflect the changes he made to the payload. But he can't do that
+because he's missing the key ingredient-the secret. See the remnants of the secret are stored in the token as the signature (which
+recall is a mix of the header, payload and secret run through a hashing function) but there's no way for our user to extract the
+secret from that hashed mix.
+
+So if the user changes the payload and sends that back to the api with the original header and signature, the api is going to take
+his header and payload and add it to the secret (which the api knows) and generate a 'test signature' which it will then compare to the 
+signature that the user sent back (which recall was created using the original payload values). This will result in a mismatch of 
+the two signatures (the user's and the api's) because the user's signature was cooked by using an ingredient (the altered payload)
+which does not match the original ingredient (the unaltered payload). 
+
+So the secret really is the key ingredient. Without that no one can duplicate or impersonate a valid token. And the only thing the api
+needs to store is the secret. All the other info is kept by the user in the jwt token. And if the api can't use the components of the
+user's token (header and payload) along with the secret to generate a signature that matches the one being returned by the user,
+no dice.

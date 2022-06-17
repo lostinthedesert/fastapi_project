@@ -1,0 +1,7 @@
+pip freeze = list of dependancies installed 
+
+pip freeze > requirements.txt = pipe list of dependancies to a .txt file to upload to git so other developers know what dependancies are required to run your app
+
+pip install -r requirements.txt = command other developers will use to install your dependancies in bulk
+
+we also created '.gitignore' which is a file containing filenames and directories that we DO NOT want uploaded to git. including our environment variables, our virtual environment folder (venv) and our '__pycache__' files.

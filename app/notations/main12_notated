@@ -1,0 +1,114 @@
+# This lesson looks at creating users for our message board app, using a database/table to store login credentials and hashing
+# user passwords. We are installing passlib for our encryption function and that is saved in a separate .py file called 'utils.py'
+# which we have created and imported into main.py. We have also added some models to 'schemas.py' to help us with gathering our 
+# user's login credentials and returning their entry back to the frontend. And we have updated models.py with a new table 'users'
+# to store our users' login information.
+
+from random import randrange
+from typing import Optional, List
+from fastapi import Body, FastAPI, Response, status, HTTPException, Depends 
+import psycopg2 
+from psycopg2.extras import RealDictCursor
+import time
+from sqlalchemy.orm import Session
+from . import models, schemas, utils
+from .database import engine, SessionLocal, get_db
+
+
+
+# CONNECT TO FASTAPI DATABASE ON POSTGRES USING SQLALCHEMY
+models.Base.metadata.create_all(bind=engine)
+
+# CREATE FASTAPI VARIABLE
+app=FastAPI()
+
+# connect to fastapi database
+while True:
+
+    try:
+        conn=psycopg2.connect(host='localhost', database='fastapi', user='postgres', password='dummy123', 
+        cursor_factory=RealDictCursor)
+        cursor=conn.cursor()
+        print('database connection was successful')
+        break
+    except Exception as error:
+        print('connecting to database failed')
+        print('error was ', error)
+        time.sleep(2)
+
+# Root path
+@app.get("/") 
+def root():
+    return {"message": "this message will automatically reload :)"}
+
+# Get all posts
+@app.get("/posts", response_model= List[schemas.Post]) 
+def posts(db: Session = Depends(get_db)):
+    posts = db.query(models.Post).all()
+    return posts
+
+# create a new post
+@app.post("/posts", status_code=status.HTTP_201_CREATED, response_model= schemas.Post) 
+def create_posts(post: schemas.PostCreate, db: Session = Depends(get_db)):
+    new_post=models.Post(**post.dict())
+    db.add(new_post)
+    db.commit()
+    db.refresh(new_post)
+    return new_post
+
+# Get a single post
+@app.get("/posts/{id}", response_model= schemas.Post)   
+def get_post(id: int, db: Session = Depends(get_db)):
+    one_post=db.query(models.Post).filter(models.Post.id==id).first()   
+    if not one_post:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Post with id:{id} not found") 
+    return one_post
+
+# Delete a post
+@app.delete("/posts/{id}", status_code=status.HTTP_204_NO_CONTENT)   
+def delete_post(id: int, db: Session = Depends(get_db)): 
+    one_post=db.query(models.Post).filter(models.Post.id==id)
+    if one_post.first()==None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Post with id:{id} not found")  
+    one_post.delete(synchronize_session=False)
+    db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+# Update a post
+@app.put("/posts/{id}", status_code=status.HTTP_202_ACCEPTED, response_model= schemas.Post)   
+def update_post(id: int, post: schemas.PostCreate, db: Session = Depends(get_db)): 
+    one_post=db.query(models.Post).filter(models.Post.id==id)
+    update_post = one_post.first()
+    if update_post ==None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Post with id:{id} not found")
+    one_post.update(post.dict(), synchronize_session=False)
+    db.commit()
+    return one_post.first()
+
+# we are going to create a path operator for gathering user sign up information in the same way we handle other HTTP post requests. our
+# domain will be '/users' and we have passed a response model from schemas.py. We now have a 'user' variable defined in the path
+# operation that will accept an email and password from the user. The email can be stored in the new table 'users' as is but the  
+# password must be encrypted. This is where we will make use of some objects from 'passlib'. We're going to call our 'hash' function
+# from the 'utils' module we created which will pass our user's created password through a hashing program and convert it into 
+# an encrypted string and return that string to us for storage in our database. Notice the circular logic of the two lines of 
+# hashing code: a variable 'hashed_password' is created and defined and then used to re-define an existing model value ('user.password').
+# Also note that two different iterations of 'hash' are being used. One is the function we created in utils.py and the other is a 
+# method of the 'CryptContext' object imported from passlib (which appears inside of our hash function). See utils_notated for more
+# details about passlib, etc.
+
+# the rest of our function proceeds like the create_post function. We unpack our pydantic dictionary model for 'user' and assign
+# it the variable 'new_user', add it to our users table, commit it, refresh it and return it to the user under the schema.UserResponse
+# criteria (which does not include the user's password for obvious security reasons).
+
+# CREATE USER
+@app.post("/users", status_code=status.HTTP_202_ACCEPTED, response_model= schemas.UserResponse)
+def create_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
+    hashed_password=utils.hash(user.password)
+    user.password=hashed_password
+    
+    new_user=models.User(**user.dict())
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+    return new_user
+    
