@@ -2,3 +2,5 @@ __pycache__
 venv/
 .env
 notations/
+nginx.txt
+gunicorn.service
