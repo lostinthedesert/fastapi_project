@@ -27,4 +27,4 @@ app.include_router(vote.router)
 # Root path
 @app.get("/") 
 def root():
-    return {"message": "this is the official pando llc homepage :)"}
+    return {"greetings": "this is the official pando llc homepage :)"}
